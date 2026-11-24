@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/codebase-intelligence/codebase-model.schema.json",
+  "title": "Codebase model (dependency graph + architecture metrics)",
+  "description": "Output of scripts/dependency_analyzer.py analyze. A snapshot of STATIC relationships found in source text. It is not proof of runtime behaviour and it is stale as soon as the repository changes.",
+  "type": "object",
+  "required": ["model_version", "tool_version", "generated_at", "repository", "nodes", "edges", "cycles", "metrics", "coverage", "analyzers", "limitations"],
+  "properties": {
+    "model_version": {"type": "string", "description": "Schema/semantics version of this document. A reader that does not know the version must not reuse the model."},
+    "tool_version": {"type": "string"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "repository": {"$ref": "#/$defs/repositoryIdentity"},
+    "nodes": {
+      "type": "object",
+      "description": "Keyed by repository-relative POSIX path. Implicit nodes use the prefixes env: and event:. Go package nodes end with '/'.",
+      "additionalProperties": {"$ref": "#/$defs/node"}
+    },
+    "edges": {"type": "array", "items": {"$ref": "#/$defs/edge"}},
+    "cycles": {"type": "array", "items": {"$ref": "#/$defs/cycle"}},
+    "entry_points": {"type": "array", "items": {"$ref": "#/$defs/entryPoint"}},
+    "externals": {"type": "array", "items": {"$ref": "#/$defs/external"}},
+    "unresolved": {
+      "type": "array",
+      "description": "References that could not be resolved to a repository file. Unresolved is not the same as external: it may be generated code, a path alias, or an analyzer gap.",
+      "items": {"type": "object", "required": ["source", "spec", "reason"], "properties": {"source": {"type": "string"}, "spec": {"type": "string"}, "reason": {"type": "string"}, "line": {"type": "integer"}}}
+    },
+    "symbols": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "object", "required": ["kind", "name", "line"], "properties": {"kind": {"type": "string"}, "name": {"type": "string"}, "line": {"type": "integer"}}}}},
+    "manifests": {"type": "array", "items": {"type": "object", "required": ["ecosystem", "path"], "properties": {"ecosystem": {"type": "string"}, "path": {"type": "string"}, "name": {"type": ["string", "null"]}, "prod_count": {"type": "integer"}, "dev_count": {"type": "integer"}}}},
+    "declared_vs_discovered": {"type": "array", "items": {"type": "object", "required": ["directory", "ecosystem", "declared_not_imported", "imported_not_declared", "note"], "properties": {"directory": {"type": "string"}, "ecosystem": {"type": "string"}, "declared_not_imported": {"type": "array", "items": {"type": "string"}}, "imported_not_declared": {"type": "array", "items": {"type": "string"}}, "comparison": {"type": "string", "description": "Always 'candidates': these lists are leads to investigate, not findings."}, "note": {"type": "string"}}}},
+    "implicit_orphans": {"type": "object", "properties": {"events_emit_only": {"type": "array"}, "events_listen_only": {"type": "array"}}},
+    "build_targets": {"type": "array"},
+    "metrics": {
+      "type": "object",
+      "required": ["internal_edges", "edges_discovered", "edges_inferred", "highest_fan_in", "highest_fan_out", "modules"],
+      "properties": {
+        "internal_edges": {"type": "integer", "minimum": 0},
+        "edges_discovered": {"type": "integer", "minimum": 0},
+        "edges_inferred": {"type": "integer", "minimum": 0},
+        "highest_fan_in": {"$ref": "#/$defs/ranking"},
+        "highest_fan_out": {"$ref": "#/$defs/ranking"},
+        "hubs": {"type": "array", "items": {"type": "string"}},
+        "top5_target_share": {"type": "number", "minimum": 0, "maximum": 1, "description": "Fraction of all incoming references that land on the five most-depended-on files (concentration)."},
+        "isolated_source_files": {"type": "array", "items": {"type": "string"}},
+        "isolated_note": {"type": "string"},
+        "module_depth": {"type": "integer", "minimum": 1},
+        "modules": {
+          "type": "object",
+          "required": ["nodes", "edges"],
+          "properties": {
+            "nodes": {"type": "array", "items": {"type": "object", "required": ["module", "files", "loc", "depends_on", "depended_on_by", "instability"], "properties": {"module": {"type": "string"}, "files": {"type": "integer"}, "loc": {"type": "integer"}, "depends_on": {"type": "integer"}, "depended_on_by": {"type": "integer"}, "instability": {"type": ["number", "null"], "minimum": 0, "maximum": 1}}}},
+            "edges": {"type": "array", "items": {"type": "object", "required": ["source", "target", "count", "discovered"], "properties": {"source": {"type": "string"}, "target": {"type": "string"}, "count": {"type": "integer"}, "discovered": {"type": "integer"}}}}
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "required": ["files_listed", "files_analyzed", "by_language", "skipped", "truncated"],
+      "properties": {
+        "files_listed": {"type": "integer"}, "files_analyzed": {"type": "integer"}, "truncated": {"type": "boolean"},
+        "listing_source": {"enum": ["git", "walk"]},
+        "symlinks_skipped": {"type": "integer"},
+        "ignored_dirs_seen": {"type": "object", "additionalProperties": {"type": "integer"}},
+        "skipped": {"type": "object", "additionalProperties": {"type": "integer"}, "description": "Reasons files were listed but not analysed: binary, too_large, unreadable, sensitive_not_read, no_analyzer."},
+        "by_language": {"type": "object", "additionalProperties": {"type": "object", "required": ["files", "analyzed"], "properties": {"files": {"type": "integer"}, "analyzed": {"type": "integer"}, "analyzer": {"type": ["string", "null"]}}}},
+        "analysis_errors": {"type": "array"}
+      }
+    },
+    "analyzers": {"type": "object", "additionalProperties": {"type": "object", "required": ["depth", "languages", "version"], "properties": {"depth": {"enum": ["ast", "regex", "basic"]}, "languages": {"type": "array", "items": {"type": "string"}}, "version": {"type": "string"}}}},
+    "limitations": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+  },
+  "$defs": {
+    "repositoryIdentity": {
+      "type": "object",
+      "required": ["kind", "name"],
+      "properties": {
+        "kind": {"enum": ["git", "path"], "description": "git identities include root commits and are strong; path identities are only a directory name and must be confirmed with the user."},
+        "name": {"type": "string"},
+        "root_commits": {"type": "array", "items": {"type": "string"}},
+        "head": {"type": "string"},
+        "branch": {"type": "string"}
+      }
+    },
+    "node": {
+      "type": "object",
+      "required": ["language", "role"],
+      "properties": {
+        "language": {"type": "string"},
+        "loc": {"type": "integer", "minimum": 0},
+        "role": {"type": "string", "description": "source, test, build, docs, config, generated, package, config-key, event, other"},
+        "analyzer": {"type": ["string", "null"], "description": "null means the file was listed but no analyzer understood it: its relationships are invisible."},
+        "entry_point": {"type": "boolean"},
+        "type": {"enum": ["implicit", "package"]}
+      }
+    },
+    "edge": {
+      "type": "object",
+      "required": ["source", "target", "kind", "evidence", "line", "spec", "scope"],
+      "properties": {
+        "source": {"type": "string"}, "target": {"type": "string"},
+        "kind": {"type": "string", "description": "import, package-member (structural; not coupling), env-read, event-emit, event-listen, include, and analyzer-specific kinds."},
+        "evidence": {"enum": ["discovered", "inferred"], "description": "discovered: written in source and resolved by a deterministic rule. inferred: heuristic, ambiguous or convention-based. Neither describes runtime behaviour."},
+        "line": {"type": "integer", "minimum": 0},
+        "spec": {"type": "string"},
+        "scope": {"type": "string", "description": "module = executes at import time; other values (lazy, type-only, ...) do not."},
+        "names": {"type": "array", "items": {"type": "string"}},
+        "note": {"type": "string"}
+      }
+    },
+    "cycle": {
+      "type": "object",
+      "required": ["files", "example_cycle", "size", "import_time_cycle"],
+      "properties": {"files": {"type": "array", "items": {"type": "string"}, "minItems": 2}, "example_cycle": {"type": "array", "items": {"type": "string"}}, "size": {"type": "integer", "minimum": 2}, "import_time_cycle": {"type": "boolean"}, "note": {"type": "string"}}
+    },
+    "entryPoint": {"type": "object", "required": ["path", "evidence"], "properties": {"path": {"type": "string"}, "evidence": {"enum": ["discovered", "inferred"]}, "reasons": {"type": "array", "items": {"type": "string"}}}},
+    "external": {"type": "object", "required": ["package", "files", "file_count", "kinds"], "properties": {"package": {"type": "string"}, "files": {"type": "array", "items": {"type": "string"}}, "file_count": {"type": "integer"}, "kinds": {"type": "array", "items": {"type": "string"}}}},
+    "ranking": {"type": "array", "items": {"type": "object", "required": ["path", "count"], "properties": {"path": {"type": "string"}, "count": {"type": "integer", "minimum": 1}}}}
+  }
+}

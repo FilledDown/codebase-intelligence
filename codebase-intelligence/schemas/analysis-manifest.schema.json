@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/codebase-intelligence/analysis-manifest.schema.json",
+  "title": "Analysis manifest (.codebase-intelligence/manifest.json)",
+  "description": "Written by scripts/file_fingerprints.py save. Lets a later session decide (1) whether a saved model belongs to this repository, (2) which files changed since, and (3) how much of the repository the earlier analysis covered. The manifest is a cache index, never proof of current behaviour.",
+  "type": "object",
+  "required": ["model_version", "tool_version", "analyzed_at", "repository", "analyzer_versions", "fingerprints", "coverage", "known_limitations"],
+  "properties": {
+    "model_version": {"type": "string", "description": "A saved model with a version this tool does not understand must be rebuilt, not reused."},
+    "tool_version": {"type": "string"},
+    "analyzed_at": {"type": "string", "format": "date-time"},
+    "repository": {
+      "type": "object",
+      "required": ["kind", "name"],
+      "properties": {
+        "kind": {"enum": ["git", "path"]},
+        "name": {"type": "string"},
+        "root_commits": {"type": "array", "items": {"type": "string"}, "description": "Root commit hashes; stable across clones and the strongest identity signal."},
+        "head": {"type": "string"},
+        "branch": {"type": "string"}
+      }
+    },
+    "analyzer_versions": {"type": "object", "additionalProperties": {"type": "string"}, "description": "A changed analyzer version invalidates edges that analyzer produced."},
+    "fingerprints": {
+      "type": "object",
+      "description": "Repository-relative path to content fingerprint. Files that commonly hold secrets are never fingerprinted.",
+      "additionalProperties": {"type": "object", "required": ["sha256", "size"], "properties": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "size": {"type": "integer", "minimum": 0}}}
+    },
+    "coverage": {
+      "type": "object",
+      "required": ["files_listed", "truncated"],
+      "properties": {
+        "files_listed": {"type": "integer"},
+        "files_analyzed": {"type": ["integer", "null"]},
+        "truncated": {"type": "boolean"},
+        "by_language": {"type": "object"},
+        "notes": {"type": "array", "items": {"type": "string"}, "description": "Human statements of what the analysis did NOT cover (e.g. 'read only src/api and src/auth')."}
+      }
+    },
+    "known_limitations": {"type": "array", "items": {"type": "string"}},
+    "artifacts": {"type": "array", "items": {"type": "string"}, "description": "Other files stored beside the manifest (overview.md, architecture.md, ...)."}
+  }
+}

@@ -1,0 +1,5 @@
+flask
+sqlalchemy
+pyjwt
+redis
+psycopg2-binary

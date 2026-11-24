@@ -1,0 +1,7 @@
+[project]
+name = "todo-cli"
+version = "0.1.0"
+dependencies = []
+
+[project.scripts]
+todo = "todo.cli:main"

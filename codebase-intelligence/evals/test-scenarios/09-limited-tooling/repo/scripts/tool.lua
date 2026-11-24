@@ -1,0 +1,2 @@
+local function greet(name) print("hi " .. name) end
+greet("world")

